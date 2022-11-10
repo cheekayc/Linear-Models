@@ -5,7 +5,7 @@ date: "2022-11-10"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, eval = FALSE}
 knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
 library(tidyverse)
@@ -13,6 +13,14 @@ library(p8105.datasets)
 
 set.seed(1)
 ```
+
+## *Model Fitting*
+
+* `lm` = linear models (continuous outcome)
+
+* `glm` = generalized linear models (non-continuous outcome)
+
+* Use ***broom package*** for output
 
 ```{r}
 data("nyc_airbnb")
@@ -26,4 +34,118 @@ nyc_airbnb =
   filter(borough != "Staten Island") %>% 
   select(price, stars, borough, neighborhood, room_type)
 ```
+
+```{r}
+model = lm(price ~ stars + borough, data = nyc_airbnb)
+# price = outcome,  stars & borough = predictors
+
+model
+
+summary(model)
+
+model %>% 
+  broom::tidy() %>% 
+  mutate(
+    term = str_replace(term, "borough", "Borough: ")) %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 2)
+```
+
+Change reference category: 
+```{r}
+model_chng_ref = 
+  nyc_airbnb %>% 
+  mutate(
+    borough = fct_infreq(borough)) %>% # Now the most common category would be the reference group.
+  lm(price ~ stars + borough, data = .)
+
+model_chng_ref %>% 
+  broom::tidy() %>% 
+  mutate(
+    term = str_replace(term, "borough", "Borough: ")) %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 2)
+```
+
+`glance` function in broom
+
+```{r}
+model %>% 
+  broom::glance() %>% # The glance function gives us r-squared, sigma, df, etc.
+  select(r.squared, p.value, AIC)
+```
+
+
+## Diagnostics
+
+```{r}
+modelr::add_residuals(nyc_airbnb, model) %>% 
+  ggplot(aes(x = stars, y = resid)) +
+  geom_point()
+
+nyc_airbnb %>% 
+  modelr::add_residuals(model) %>% 
+  ggplot(aes(x = borough, y = resid)) +
+  geom_violin() +
+  ylim(-250, 250)
+# From the plot, we can see that the variances are not constant. 
+# Linear regression assumes constant residuals.. So this assumption is violated.
+```
+
+
+## Hypothesis Testing
+
+one coefficient
+```{r}
+model_chng_ref %>% 
+  broom::tidy()
+
+H_null = lm(price ~ stars, data = nyc_airbnb)
+H_alt = lm(price ~ stars + borough, data = nyc_airbnb)
+
+anova(H_null, H_alt) %>% 
+  broom::tidy()
+  
+```
+
+## Room type by borough
+
+Interactions?
+
+```{r}
+model_int = 
+  nyc_airbnb %>% 
+  lm(price ~ stars + borough * room_type, data = .)
+
+model_int %>% 
+  broom::tidy() %>% 
+  knitr::kable(digits = 3)
+```
+
+Can we fit models by borough?
+```{r}
+nyc_airbnb %>% 
+  nest(df = -borough) %>% 
+  mutate(
+    models = map(.x = df, ~lm(price ~ stars + room_type, data = .x)),
+    results = map(models, broom::tidy)) %>% 
+  pull(results)
+
+nyc_airbnb %>% 
+  nest(df = -borough) %>% 
+  mutate(
+    models = map(.x = df, ~lm(price ~ stars + room_type, data = .x)),
+    results = map(models, broom::tidy)) %>% 
+  select(borough, results) %>% 
+  unnest(results)
+```
+
+```{r}
+nyc_airbnb %>% 
+  filter(borough == "Bronx") %>% 
+  lm(price ~ stars + room_type, data = .) %>% 
+  broom::tidy()
+```
+
+
 
