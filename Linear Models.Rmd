@@ -2,7 +2,7 @@
 title: "Linear Models"
 author: "Lectured by Jeff Goldsmith"
 date: "2022-11-10"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, eval = FALSE}
@@ -14,6 +14,8 @@ library(p8105.datasets)
 set.seed(1)
 ```
 
+**Check this [page](https://www.statology.org/t-test-linear-regression/) for simple explanation of linear regression.**
+
 ## *Model Fitting*
 
 * `lm` = linear models (continuous outcome)
@@ -22,6 +24,7 @@ set.seed(1)
 
 * Use ***broom package*** for output
 
+Load and clean `nyc_airbnb` dataset.
 ```{r}
 data("nyc_airbnb")
 
@@ -31,18 +34,22 @@ nyc_airbnb =
   rename(
     borough = neighbourhood_group,
     neighborhood = neighbourhood) %>% 
-  filter(borough != "Staten Island") %>% 
+  filter(borough != "Staten Island") %>% # because Staten Island data is too small. Not meaningful to analyze that.
   select(price, stars, borough, neighborhood, room_type)
 ```
 
+Fit a linear model to look at how **price** (outcome) changes with **rating** and **borough**.
 ```{r}
 model = lm(price ~ stars + borough, data = nyc_airbnb)
-# price = outcome,  stars & borough = predictors
+# Regression equation: price = -70.41 + 31.99*stars + 40.50*Brooklyn + 90.25*Manhattan + 13.21*Queens
 
-model
+model 
+# Up to this point, we only get the coefficients of each variable.
 
-summary(model)
+summary(model) 
+# Summary will give us a lot of information, such as standard error, t-value, p-value, r-squared, etc.
 
+# To output the results in a tidy way, use broom::tidy.
 model %>% 
   broom::tidy() %>% 
   mutate(
@@ -51,7 +58,10 @@ model %>%
   knitr::kable(digits = 2)
 ```
 
-Change reference category: 
+
+
+In the example above, Bronx is the reference category according to alphabetical order.                                                      
+What if we want to change the reference category?
 ```{r}
 model_chng_ref = 
   nyc_airbnb %>% 
@@ -67,16 +77,41 @@ model_chng_ref %>%
   knitr::kable(digits = 2)
 ```
 
-`glance` function in broom
+##### `broom::glance`
+
+* `broom::tidy` gives us estimate, std.error, statistics (t-test?), and p-value.
+
+* `broom::glance` gives us r-squared, adj.r-squared, sigma, statistic, p-value, df, logLik, AIC, BIC, deviance, df.residual, n_obs
 
 ```{r}
 model %>% 
-  broom::glance() %>% # The glance function gives us r-squared, sigma, df, etc.
+  broom::glance() %>%
   select(r.squared, p.value, AIC)
 ```
 
 
-## Diagnostics
+## **Diagnostics**
+
+The **fitted** (or predicted) values are the y-values that you would expect for the given x-values according to the built regression model
+(or visually, the best-fitting straight regression line).
+
+To use linear regression, the following assumptions must be met:                                                                     
+1) **Linearity**: The relationship between the independent and dependent variables is linear. 
+  * Check this assumption by examining a scatterplot of x and y.  
+  
+2) **Homoscedasticity**: The variance of residual is the same for any value of X.
+  * Check this assumption by examining the scatterplot of “residuals versus fits”; the variance of the residuals should be the same across
+  all values of the x-axis. If the plot shows a pattern (e.g., bowtie or megaphone shape), then variances are not consistent, and this
+  assumption has not been met.
+  
+3) **Independence**: Observations are independent of each other (not repeated by the same person, don't live in same household, not siblings, etc.)
+There is not a relationship between the residuals and the variable; in other words, is independent of errors. 
+  * Check this assumption by examining a scatterplot of “residuals versus fits”; the correlation should be approximately 0. In other words, 
+  there should not look like there is a relationship.
+  
+4) **Normality**: The residuals must be approximately normally distributed.
+  * Check this assumption by examining a normal probability plot; the observations should be near the line. You can also examine a histogram 
+  of the residuals; it should be approximately normally distributed.
 
 ```{r}
 modelr::add_residuals(nyc_airbnb, model) %>% 
