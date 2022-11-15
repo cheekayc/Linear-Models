@@ -1,0 +1,36 @@
+---
+title: "Cross Validation"
+author: "Lectured by Jeff Goldsmith"
+date: "2022-11-15"
+output: github_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(modelr)
+library(mgcv)
+```
+
+# Model selection
+
+When you have lots of variables, you have to choose which ones will go in your model.
+
+For nested models, you have tests
+* You have to be worried about multiple comparisons and "fishiing"
+
+For non-nested models, you don't have tests
+* AIC/BIC/etc are traditional tools
+* Balance goodness of fit with "complexity"
+
+# Cross validation
+
+Randomly split your data into "training" and "testing"
+- "Training" is data you use to build your model
+- "Testing" is data you use to evaluate out-of-sample fit
+- Exact ratio depends on data size, but preferably 80/20
+
+
+
+
