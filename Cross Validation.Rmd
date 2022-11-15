@@ -86,4 +86,28 @@ train_df %>%
   geom_line(aes(y = pred), color = "red")
 ```
 
+Let's make predictions and compute Root Mean Square Errors (RMSEs).
+
+```{r}
+rmse(linear_mod, test_df)
+rmse(wiggly_mod, test_df)
+rmse(smooth_mod, test_df)
+
+# Lower values mean better. We want lower prediction error!
+```
+Is this error prediction due to chance or it's significant?
+
+## Can we iterate?
+
+```{r}
+cv_df = 
+  crossv_mc(nonlin_df, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)) %>% 
+  mutate(
+    linear_fits = map(.x = train, ~lm(y ~ x, data = .x)))
+```
+
+
 

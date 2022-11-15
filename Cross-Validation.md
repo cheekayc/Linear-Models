@@ -90,3 +90,41 @@ train_df %>%
 ```
 
 ![](Cross-Validation_files/figure-gfm/unnamed-chunk-4-3.png)<!-- -->
+
+Let’s make predictions and compute Root Mean Square Errors (RMSEs).
+
+``` r
+rmse(linear_mod, test_df)
+```
+
+    ## [1] 0.8524094
+
+``` r
+rmse(wiggly_mod, test_df)
+```
+
+    ## [1] 0.3630194
+
+``` r
+rmse(smooth_mod, test_df)
+```
+
+    ## [1] 0.3542663
+
+``` r
+# Lower values mean better. We want lower prediction error!
+```
+
+Is this error prediction due to chance or it’s significant?
+
+## Can we iterate?
+
+``` r
+cv_df = 
+  crossv_mc(nonlin_df, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)) %>% 
+  mutate(
+    linear_fits = map(.x = train, ~lm(y ~ x, data = .x)))
+```
