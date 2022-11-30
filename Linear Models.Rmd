@@ -5,16 +5,23 @@ date: "2022-11-10"
 output: github_document
 ---
 
-```{r setup, eval = FALSE}
+```{r setup}
 knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
 library(tidyverse)
 library(p8105.datasets)
 
-set.seed(1)
+set.seed(1) # to ensure reproducibility
 ```
 
 **Check this [page](https://www.statology.org/t-test-linear-regression/) for simple explanation of linear regression.**
+
+### Predictors in a linear model
+
+* **Outcome** is **continuous**.
+
+* **Continuous exposure** can be added to the model directly, but **categorical exposure** must create dummy variables.
+
 
 ## *Model Fitting*
 
@@ -30,6 +37,7 @@ data("nyc_airbnb")
 
 nyc_airbnb = 
   nyc_airbnb %>% 
+  # make 10 stars rating to 5 stars.
   mutate(stars = review_scores_location / 2) %>% 
   rename(
     borough = neighbourhood_group,
@@ -58,18 +66,16 @@ model %>%
   knitr::kable(digits = 2)
 ```
 
-
-
 In the example above, Bronx is the reference category according to alphabetical order.                                                      
 What if we want to change the reference category?
 ```{r}
-model_chng_ref = 
+model_change_ref = 
   nyc_airbnb %>% 
   mutate(
     borough = fct_infreq(borough)) %>% # Now the most common category would be the reference group.
   lm(price ~ stars + borough, data = .)
 
-model_chng_ref %>% 
+model_change_ref %>% 
   broom::tidy() %>% 
   mutate(
     term = str_replace(term, "borough", "Borough: ")) %>% 
@@ -77,9 +83,10 @@ model_chng_ref %>%
   knitr::kable(digits = 2)
 ```
 
-##### `broom::glance`
 
-* `broom::tidy` gives us estimate, std.error, statistics (t-test?), and p-value.
+#### `broom::glance`
+
+* `broom::tidy` gives us estimate, std.error, statistics (t-distribution - correlation coefficient use t-distribution as well), and p-value.
 
 * `broom::glance` gives us r-squared, adj.r-squared, sigma, statistic, p-value, df, logLik, AIC, BIC, deviance, df.residual, n_obs
 
@@ -88,7 +95,7 @@ model %>%
   broom::glance() %>%
   select(r.squared, p.value, AIC)
 ```
-
+**AIC** tests how well a model fits the data...
 
 ## **Diagnostics**
 
@@ -105,7 +112,7 @@ To use linear regression, the following assumptions must be met:
   assumption has not been met.
   
 3) **Independence**: Observations are independent of each other (not repeated by the same person, don't live in same household, not siblings, etc.)
-There is not a relationship between the residuals and the variable; in other words, is independent of errors. 
+There is no relationship between the residuals and the predictors; in other words, is independent of errors. 
   * Check this assumption by examining a scatterplot of “residuals versus fits”; the correlation should be approximately 0. In other words, 
   there should not look like there is a relationship.
   
@@ -114,38 +121,45 @@ There is not a relationship between the residuals and the variable; in other wor
   of the residuals; it should be approximately normally distributed.
 
 ```{r}
-modelr::add_residuals(nyc_airbnb, model) %>% 
+# Get residuals and look at them:
+modelr::add_residuals(nyc_airbnb, model) %>% # in the () indicates which datsset and which model
   ggplot(aes(x = stars, y = resid)) +
   geom_point()
+
+# We should see mean zero & constant variance.
+# From the plot, it seems like stars 4-5 have more variances. So constant variance assumption is violated here.
 
 nyc_airbnb %>% 
   modelr::add_residuals(model) %>% 
   ggplot(aes(x = borough, y = resid)) +
   geom_violin() +
+  # zoom in a little bit..
   ylim(-250, 250)
-# From the plot, we can see that the variances are not constant. 
+# From the plot, we can see that the variances are not constant. Distribution seems skewed.
 # Linear regression assumes constant residuals.. So this assumption is violated.
 ```
 
 
 ## Hypothesis Testing
 
-one coefficient
+#### One coefficient: Example (stars)
 ```{r}
-model_chng_ref %>% 
+model_change_ref %>% 
   broom::tidy()
 
-H_null = lm(price ~ stars, data = nyc_airbnb)
-H_alt = lm(price ~ stars + borough, data = nyc_airbnb)
+model_null = lm(price ~ stars, data = nyc_airbnb)
+model_alt = lm(price ~ stars + borough, data = nyc_airbnb)
 
-anova(H_null, H_alt) %>% 
+anova(model_null, model_alt) %>% 
   broom::tidy()
-  
+# p-value for H_alt is super small, so we should put "borough" in our model.
 ```
 
-## Room type by borough
 
-Interactions?
+## Interaction
+
+In the airbnb data, we might think that star ratings and room type affects price differently in each borough. 
+One way to allow this kind of effect modification is through interaction terms:
 
 ```{r}
 model_int = 
@@ -156,17 +170,32 @@ model_int %>%
   broom::tidy() %>% 
   knitr::kable(digits = 3)
 ```
+This works, but the output takes time to think through. What does the output mean? What is the effect of room type in each borough?
 
-Can we fit models by borough?
+Alternatively, we can nest within boroughs and fit borough-specific models associating price with rating and room type:
+The advantage of doing this is that it makes the interpretation easier.
+
+Fit models by borough:
 ```{r}
-nyc_airbnb %>% 
-  nest(df = -borough) %>% 
-  mutate(
-    models = map(.x = df, ~lm(price ~ stars + room_type, data = .x)),
-    results = map(models, broom::tidy)) %>% 
-  pull(results)
+# I can nest everything inside the airbnb dataset according to borough:
+nest_df = 
+  nyc_airbnb %>% 
+    nest(df = -borough) %>% 
+    mutate(
+    # Create a new variable that map the linear regression function to each of the borough.
+      models = map(.x = df, ~lm(price ~ stars + room_type, data = .x)),
+    # Then, create another variable that shows the tidy results of the linear regression.
+      results = map(models, broom::tidy)) %>% 
+    pull(results)
 
-nyc_airbnb %>% 
+# From the results, we can see that in Queens, private room is $69.25 less than an entire home/apt. 
+# In Queens, shared room is $94.97 less than an entire home/apt. 
+```
+
+We can also unnest the "results":
+```{r}
+unnest = 
+  nyc_airbnb %>% 
   nest(df = -borough) %>% 
   mutate(
     models = map(.x = df, ~lm(price ~ stars + room_type, data = .x)),
@@ -175,12 +204,24 @@ nyc_airbnb %>%
   unnest(results)
 ```
 
+After unnesting the results, we can pivot wider to make the table looks nicer.
+```{r}
+unnest %>% 
+  select(borough, term, estimate) %>% 
+  mutate(term = fct_inorder(term)) %>% 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate) %>% 
+  knitr::kable(digits = 3)
+```
+
+A quick double check:
 ```{r}
 nyc_airbnb %>% 
   filter(borough == "Bronx") %>% 
   lm(price ~ stars + room_type, data = .) %>% 
   broom::tidy()
 ```
-
+Yes!! It looks like everything looks neat!
 
 

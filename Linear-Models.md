@@ -10,10 +10,10 @@ library(tidyverse)
 ```
 
     ## ── Attaching packages ─────────────────────────────────────── tidyverse 1.3.2 ──
-    ## ✔ ggplot2 3.3.6      ✔ purrr   0.3.4 
+    ## ✔ ggplot2 3.4.0      ✔ purrr   0.3.5 
     ## ✔ tibble  3.1.8      ✔ dplyr   1.0.10
     ## ✔ tidyr   1.2.1      ✔ stringr 1.4.1 
-    ## ✔ readr   2.1.2      ✔ forcats 0.5.2 
+    ## ✔ readr   2.1.3      ✔ forcats 0.5.2 
     ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
     ## ✖ dplyr::filter() masks stats::filter()
     ## ✖ dplyr::lag()    masks stats::lag()
@@ -21,19 +21,26 @@ library(tidyverse)
 ``` r
 library(p8105.datasets)
 
-set.seed(1)
+set.seed(1) # to ensure reproducibility
 ```
 
 **Check this [page](https://www.statology.org/t-test-linear-regression/)
 for simple explanation of linear regression.**
 
+### Predictors in a linear model
+
+- **Outcome** is **continuous**.
+
+- **Continuous exposure** can be added to the model directly, but
+  **categorical exposure** must create dummy variables.
+
 ## *Model Fitting*
 
--   `lm` = linear models (continuous outcome)
+- `lm` = linear models (continuous outcome)
 
--   `glm` = generalized linear models (non-continuous outcome)
+- `glm` = generalized linear models (non-continuous outcome)
 
--   Use ***broom package*** for output
+- Use ***broom package*** for output
 
 Load and clean `nyc_airbnb` dataset.
 
@@ -42,6 +49,7 @@ data("nyc_airbnb")
 
 nyc_airbnb = 
   nyc_airbnb %>% 
+  # make 10 stars rating to 5 stars.
   mutate(stars = review_scores_location / 2) %>% 
   rename(
     borough = neighbourhood_group,
@@ -124,13 +132,13 @@ alphabetical order.
 What if we want to change the reference category?
 
 ``` r
-model_chng_ref = 
+model_change_ref = 
   nyc_airbnb %>% 
   mutate(
     borough = fct_infreq(borough)) %>% # Now the most common category would be the reference group.
   lm(price ~ stars + borough, data = .)
 
-model_chng_ref %>% 
+model_change_ref %>% 
   broom::tidy() %>% 
   mutate(
     term = str_replace(term, "borough", "Borough: ")) %>% 
@@ -146,13 +154,14 @@ model_chng_ref %>%
 | Borough: Queens   |   -77.05 |     0.0 |
 | Borough: Bronx    |   -90.25 |     0.0 |
 
-##### `broom::glance`
+#### `broom::glance`
 
--   `broom::tidy` gives us estimate, std.error, statistics (t-test?),
-    and p-value.
+- `broom::tidy` gives us estimate, std.error, statistics
+  (t-distribution - correlation coefficient use t-distribution as well),
+  and p-value.
 
--   `broom::glance` gives us r-squared, adj.r-squared, sigma, statistic,
-    p-value, df, logLik, AIC, BIC, deviance, df.residual, n_obs
+- `broom::glance` gives us r-squared, adj.r-squared, sigma, statistic,
+  p-value, df, logLik, AIC, BIC, deviance, df.residual, n_obs
 
 ``` r
 model %>% 
@@ -164,6 +173,8 @@ model %>%
     ##   r.squared   p.value     AIC
     ##       <dbl>     <dbl>   <dbl>
     ## 1    0.0342 6.73e-229 404237.
+
+**AIC** tests how well a model fits the data…
 
 ## **Diagnostics**
 
@@ -179,31 +190,31 @@ of x and y.
 2)  **Homoscedasticity**: The variance of residual is the same for any
     value of X.
 
--   Check this assumption by examining the scatterplot of “residuals
-    versus fits”; the variance of the residuals should be the same
-    across all values of the x-axis. If the plot shows a pattern (e.g.,
-    bowtie or megaphone shape), then variances are not consistent, and
-    this assumption has not been met.
+- Check this assumption by examining the scatterplot of “residuals
+  versus fits”; the variance of the residuals should be the same across
+  all values of the x-axis. If the plot shows a pattern (e.g., bowtie or
+  megaphone shape), then variances are not consistent, and this
+  assumption has not been met.
 
 3)  **Independence**: Observations are independent of each other (not
     repeated by the same person, don’t live in same household, not
-    siblings, etc.) There is not a relationship between the residuals
-    and the variable; in other words, is independent of errors.
+    siblings, etc.) There is no relationship between the residuals and
+    the predictors; in other words, is independent of errors.
 
--   Check this assumption by examining a scatterplot of “residuals
-    versus fits”; the correlation should be approximately 0. In other
-    words, there should not look like there is a relationship.
+- Check this assumption by examining a scatterplot of “residuals versus
+  fits”; the correlation should be approximately 0. In other words,
+  there should not look like there is a relationship.
 
 4)  **Normality**: The residuals must be approximately normally
     distributed.
 
--   Check this assumption by examining a normal probability plot; the
-    observations should be near the line. You can also examine a
-    histogram of the residuals; it should be approximately normally
-    distributed.
+- Check this assumption by examining a normal probability plot; the
+  observations should be near the line. You can also examine a histogram
+  of the residuals; it should be approximately normally distributed.
 
 ``` r
-modelr::add_residuals(nyc_airbnb, model) %>% 
+# Get residuals and look at them:
+modelr::add_residuals(nyc_airbnb, model) %>% # in the () indicates which datsset and which model
   ggplot(aes(x = stars, y = resid)) +
   geom_point()
 ```
@@ -211,26 +222,30 @@ modelr::add_residuals(nyc_airbnb, model) %>%
 ![](Linear-Models_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
 ``` r
+# We should see mean zero & constant variance.
+# From the plot, it seems like stars 4-5 have more variances. So constant variance assumption is violated here.
+
 nyc_airbnb %>% 
   modelr::add_residuals(model) %>% 
   ggplot(aes(x = borough, y = resid)) +
   geom_violin() +
+  # zoom in a little bit..
   ylim(-250, 250)
 ```
 
 ![](Linear-Models_files/figure-gfm/unnamed-chunk-5-2.png)<!-- -->
 
 ``` r
-# From the plot, we can see that the variances are not constant. 
+# From the plot, we can see that the variances are not constant. Distribution seems skewed.
 # Linear regression assumes constant residuals.. So this assumption is violated.
 ```
 
 ## Hypothesis Testing
 
-one coefficient
+#### One coefficient: Example (stars)
 
 ``` r
-model_chng_ref %>% 
+model_change_ref %>% 
   broom::tidy()
 ```
 
@@ -244,10 +259,10 @@ model_chng_ref %>%
     ## 5 boroughBronx       -90.3      8.57    -10.5  6.64e- 26
 
 ``` r
-H_null = lm(price ~ stars, data = nyc_airbnb)
-H_alt = lm(price ~ stars + borough, data = nyc_airbnb)
+model_null = lm(price ~ stars, data = nyc_airbnb)
+model_alt = lm(price ~ stars + borough, data = nyc_airbnb)
 
-anova(H_null, H_alt) %>% 
+anova(model_null, model_alt) %>% 
   broom::tidy()
 ```
 
@@ -258,9 +273,15 @@ anova(H_null, H_alt) %>%
     ## 2 price ~ stars + borough       30525    1.01e9     3  2.53e7    256.  7.84e-164
     ## # … with abbreviated variable name ¹​statistic
 
-## Room type by borough
+``` r
+# p-value for H_alt is super small, so we should put "borough" in our model.
+```
 
-Interactions?
+## Interaction
+
+In the airbnb data, we might think that star ratings and room type
+affects price differently in each borough. One way to allow this kind of
+effect modification is through interaction terms:
 
 ``` r
 model_int = 
@@ -288,55 +309,36 @@ model_int %>%
 | boroughManhattan:room_typeShared room  |  -85.354 |    42.405 |    -2.013 |   0.044 |
 | boroughQueens:room_typeShared room     |  -24.607 |    44.339 |    -0.555 |   0.579 |
 
-Can we fit models by borough?
+This works, but the output takes time to think through. What does the
+output mean? What is the effect of room type in each borough?
+
+Alternatively, we can nest within boroughs and fit borough-specific
+models associating price with rating and room type: The advantage of
+doing this is that it makes the interpretation easier.
+
+Fit models by borough:
 
 ``` r
-nyc_airbnb %>% 
-  nest(df = -borough) %>% 
-  mutate(
-    models = map(.x = df, ~lm(price ~ stars + room_type, data = .x)),
-    results = map(models, broom::tidy)) %>% 
-  pull(results)
+# I can nest everything inside the airbnb dataset according to borough:
+nest_df = 
+  nyc_airbnb %>% 
+    nest(df = -borough) %>% 
+    mutate(
+    # Create a new variable that map the linear regression function to each of the borough.
+      models = map(.x = df, ~lm(price ~ stars + room_type, data = .x)),
+    # Then, create another variable that shows the tidy results of the linear regression.
+      results = map(models, broom::tidy)) %>% 
+    pull(results)
+
+# From the results, we can see that in Queens, private room is $69.25 less than an entire home/apt. 
+# In Queens, shared room is $94.97 less than an entire home/apt. 
 ```
 
-    ## [[1]]
-    ## # A tibble: 4 × 5
-    ##   term                  estimate std.error statistic  p.value
-    ##   <chr>                    <dbl>     <dbl>     <dbl>    <dbl>
-    ## 1 (Intercept)              90.1      15.2       5.94 5.73e- 9
-    ## 2 stars                     4.45      3.35      1.33 1.85e- 1
-    ## 3 room_typePrivate room   -52.9       3.57    -14.8  6.21e-41
-    ## 4 room_typeShared room    -70.5       8.36     -8.44 4.16e-16
-    ## 
-    ## [[2]]
-    ## # A tibble: 4 × 5
-    ##   term                  estimate std.error statistic  p.value
-    ##   <chr>                    <dbl>     <dbl>     <dbl>    <dbl>
-    ## 1 (Intercept)              91.6      25.8       3.54 4.00e- 4
-    ## 2 stars                     9.65      5.45      1.77 7.65e- 2
-    ## 3 room_typePrivate room   -69.3       4.92    -14.1  1.48e-43
-    ## 4 room_typeShared room    -95.0      11.3      -8.43 5.52e-17
-    ## 
-    ## [[3]]
-    ## # A tibble: 4 × 5
-    ##   term                  estimate std.error statistic   p.value
-    ##   <chr>                    <dbl>     <dbl>     <dbl>     <dbl>
-    ## 1 (Intercept)               69.6     14.0       4.96 7.27e-  7
-    ## 2 stars                     21.0      2.98      7.05 1.90e- 12
-    ## 3 room_typePrivate room    -92.2      2.72    -34.0  6.40e-242
-    ## 4 room_typeShared room    -106.       9.43    -11.2  4.15e- 29
-    ## 
-    ## [[4]]
-    ## # A tibble: 4 × 5
-    ##   term                  estimate std.error statistic   p.value
-    ##   <chr>                    <dbl>     <dbl>     <dbl>     <dbl>
-    ## 1 (Intercept)               95.7     22.2       4.31 1.62e-  5
-    ## 2 stars                     27.1      4.59      5.91 3.45e-  9
-    ## 3 room_typePrivate room   -124.       3.46    -35.8  9.40e-270
-    ## 4 room_typeShared room    -154.      10.1     -15.3  2.47e- 52
+We can also unnest the “results”:
 
 ``` r
-nyc_airbnb %>% 
+unnest = 
+  nyc_airbnb %>% 
   nest(df = -borough) %>% 
   mutate(
     models = map(.x = df, ~lm(price ~ stars + room_type, data = .x)),
@@ -345,25 +347,27 @@ nyc_airbnb %>%
   unnest(results)
 ```
 
-    ## # A tibble: 16 × 6
-    ##    borough   term                  estimate std.error statistic   p.value
-    ##    <chr>     <chr>                    <dbl>     <dbl>     <dbl>     <dbl>
-    ##  1 Bronx     (Intercept)              90.1      15.2       5.94 5.73e-  9
-    ##  2 Bronx     stars                     4.45      3.35      1.33 1.85e-  1
-    ##  3 Bronx     room_typePrivate room   -52.9       3.57    -14.8  6.21e- 41
-    ##  4 Bronx     room_typeShared room    -70.5       8.36     -8.44 4.16e- 16
-    ##  5 Queens    (Intercept)              91.6      25.8       3.54 4.00e-  4
-    ##  6 Queens    stars                     9.65      5.45      1.77 7.65e-  2
-    ##  7 Queens    room_typePrivate room   -69.3       4.92    -14.1  1.48e- 43
-    ##  8 Queens    room_typeShared room    -95.0      11.3      -8.43 5.52e- 17
-    ##  9 Brooklyn  (Intercept)              69.6      14.0       4.96 7.27e-  7
-    ## 10 Brooklyn  stars                    21.0       2.98      7.05 1.90e- 12
-    ## 11 Brooklyn  room_typePrivate room   -92.2       2.72    -34.0  6.40e-242
-    ## 12 Brooklyn  room_typeShared room   -106.        9.43    -11.2  4.15e- 29
-    ## 13 Manhattan (Intercept)              95.7      22.2       4.31 1.62e-  5
-    ## 14 Manhattan stars                    27.1       4.59      5.91 3.45e-  9
-    ## 15 Manhattan room_typePrivate room  -124.        3.46    -35.8  9.40e-270
-    ## 16 Manhattan room_typeShared room   -154.       10.1     -15.3  2.47e- 52
+After unnesting the results, we can pivot wider to make the table looks
+nicer.
+
+``` r
+unnest %>% 
+  select(borough, term, estimate) %>% 
+  mutate(term = fct_inorder(term)) %>% 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate) %>% 
+  knitr::kable(digits = 3)
+```
+
+| borough   | (Intercept) |  stars | room_typePrivate room | room_typeShared room |
+|:----------|------------:|-------:|----------------------:|---------------------:|
+| Bronx     |      90.067 |  4.446 |               -52.915 |              -70.547 |
+| Queens    |      91.575 |  9.654 |               -69.255 |              -94.973 |
+| Brooklyn  |      69.627 | 20.971 |               -92.223 |             -105.839 |
+| Manhattan |      95.694 | 27.110 |              -124.188 |             -153.635 |
+
+A quick double check:
 
 ``` r
 nyc_airbnb %>% 
@@ -379,3 +383,5 @@ nyc_airbnb %>%
     ## 2 stars                     4.45      3.35      1.33 1.85e- 1
     ## 3 room_typePrivate room   -52.9       3.57    -14.8  6.21e-41
     ## 4 room_typeShared room    -70.5       8.36     -8.44 4.16e-16
+
+Yes!! It looks like everything looks neat!
