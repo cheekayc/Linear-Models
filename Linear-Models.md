@@ -385,3 +385,57 @@ nyc_airbnb %>%
     ## 4 room_typeShared room    -70.5       8.36     -8.44 4.16e-16
 
 Yes!! It looks like everything looks neat!
+
+## Binary Outcomes
+
+Import, clean, and wrangle the *Washington Post* `50 cities homicide`
+data for analysis.
+
+``` r
+baltimore_df = 
+  read_csv("Data/homicide-data.csv") %>% 
+  filter(city == "Baltimore") %>% 
+  mutate(
+    resolved = as.numeric(disposition == "Closed by arrest"), # make a new variable "resolved", if "closed by arrest" then resolved = 1.
+    victim_age = as.numeric(victim_age),
+    victim_race = fct_relevel(victim_race, "White")) %>% # make the race variable a factor and move "White" to the front of all races.
+  select(resolved, victim_age, victim_race, victim_sex)
+```
+
+Using these data, we can fit a logistic regression for the binary
+“resolved” outcome and victim demographics as predictors.
+
+``` r
+fit_logistic = 
+  baltimore_df %>% 
+  glm(resolved ~ victim_age + victim_race + victim_sex, data = . , family = binomial()) 
+
+# Binomial distribution can be thought of as simply the probability of a SUCCESS or FAILURE outcome in an experiment or survey that is
+# repeated multiple times. The binomial is a type of distribution that has two possible outcomes (the prefix “bi” means two, or twice).
+
+# We use broom::tidy to make the output human readable:
+fit_logistic %>% 
+  broom::tidy() %>% 
+  # create a new variable that shows the ORs
+  mutate(OR = exp(estimate)) %>%
+  select(term, log_OR = estimate, OR, p.value) %>% 
+  knitr::kable(digits = 3)
+```
+
+| term                | log_OR |    OR | p.value |
+|:--------------------|-------:|------:|--------:|
+| (Intercept)         |  1.190 | 3.287 |   0.000 |
+| victim_age          | -0.007 | 0.993 |   0.027 |
+| victim_raceAsian    |  0.296 | 1.345 |   0.653 |
+| victim_raceBlack    | -0.842 | 0.431 |   0.000 |
+| victim_raceHispanic | -0.265 | 0.767 |   0.402 |
+| victim_raceOther    | -0.768 | 0.464 |   0.385 |
+| victim_sexMale      | -0.880 | 0.415 |   0.000 |
+
+Homicides in which the victim is Black are substantially less likely to
+be resolved that those in which the victim is white; for other races the
+effects are not significant, possible due to small sample sizes.
+Homicides in which the victim is male are significantly less like to be
+resolved than those in which the victim is female. The effect of age is
+statistically significant, but careful data inspections should be
+conducted before interpreting too deeply.
