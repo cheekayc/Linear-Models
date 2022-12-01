@@ -11,26 +11,41 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 library(tidyverse)
 library(modelr)
 library(mgcv)
+library(purrr)
 ```
 
-# Model selection
+### Model selection
 
-When you have lots of variables, you have to choose which ones will go in your model.
+When you have lots of variables, you have to choose which ones will go in your model. 
+It is best that we have a clear hypothesis with known confounders.
 
-For nested models, you have tests
-* You have to be worried about multiple comparisons and "fishiing"
+For **nested** models, you have tests
+* You have to be worried about multiple comparisons and "fishing"
 
-For non-nested models, you don't have tests
+For **non-nested** models, you don't have tests
 * AIC/BIC/etc are traditional tools 
   * To understand what [AIC](https://www.scribbr.com/statistics/akaike-information-criterion/) is, click on it.
 * Balance goodness of fit with "complexity"
 
-# Cross validation
 
-Randomly split your data into "training" and "testing"
+### Cross validation
+
+Ideally, we should build our model with the dataset we have. Then, go out and a new data. 
+Confirm that the model we build "works" for the new data. But that does not happen in real life.
+
+So what do we do?
+
+Randomly split your data into two sets - "training" and "testing"
 - "Training" is data you use to build your model
-- "Testing" is data you use to evaluate out-of-sample fit
+- "Testing" is data you use to evaluate out-of-sample fit, in other words, to check if the model is generalizable.
 - Exact ratio depends on data size, but preferably 80/20
+
+We evaluate using *root mean squared error* (***RMSE***) - basically asking how far is my predicted value from the true value
+using the dataset that has nothing to do with building the model at the first place.
+* Small *RMSE* is better, meaning the model is good.
+
+
+## Cross validation "*by hand*"
 
 ```{r}
 # Create a dataframe with 100 random nonlinear numbers (x-variable) and a y-variable that depends on x-variable.
@@ -47,10 +62,15 @@ nonlin_df %>%
 ```
 
 ```{r get this by hand}
+# Random take 80 observations from the "nonlin_df" dataset to make a training set to build a model:
 train_df = sample_n(nonlin_df, 80)
+
+# Create a testing set using the remaining 20 observations from the "nonlin_df" dataset:
 test_df = anti_join(nonlin_df, train_df, by = "id")
+# anti_join kinda join "nonlin_df" & "train_df" together but whatever "id" is overlapped (occurred in both datasets) will be removed.
 ```
 
+Just to show the overlay of the "*training*" dataset (black dots) and the "*testing*" dataset (red dots).
 ```{r}
 train_df %>% 
   ggplot(aes(x = x, y = y)) + 
@@ -58,17 +78,16 @@ train_df %>%
   geom_point(data = test_df, color = "red")
 ```
 
-Let's try to fit three models.
-
+Let's try to fit three models on the training dataset.
 ```{r}
 linear_mod = lm(y ~ x, data = train_df)
 smooth_mod = gam(y ~ s(x), data = train_df)
-wiggly_mod = gam(y ~ s(x, k = 30), sp = 10e-6, data = train_df)
+wiggly_mod = gam(y ~ s(x, k = 30), sp = 10e-6, data = train_df) # k & sp will give us a wiggly line.
 ```
 
 ```{r}
 train_df %>% 
-  add_predictions(linear_mod) %>% 
+  add_predictions(linear_mod) %>% # create a column with the prediction values
   ggplot(aes(x = x, y = y)) +
   geom_point() +
   geom_line(aes(y = pred), color = "red")
@@ -86,8 +105,9 @@ train_df %>%
   geom_line(aes(y = pred), color = "red")
 ```
 
-Let's make predictions and compute Root Mean Square Errors (RMSEs).
+Among these 3 models, which of them is the best? Use RMSE to find out!
 
+Use "*testing*" dataset to compute RMSE and test which model is the best:
 ```{r}
 rmse(linear_mod, test_df)
 rmse(wiggly_mod, test_df)
@@ -95,19 +115,48 @@ rmse(smooth_mod, test_df)
 
 # Lower values mean better. We want lower prediction error!
 ```
-Is this error prediction due to chance or it's significant?
+Smooth model has the lowest RMSE. But is this error prediction due to chance or it's significant?
 
-## Can we iterate?
+Let's reiterate this process over and over again to find out!
+
+
+## Cross Validation using `modelr`
+
+`crossv_mc` performs the training / testing split multiple times and stores the datasets using list columns.
 
 ```{r}
 cv_df = 
-  crossv_mc(nonlin_df, 100) %>% 
+  crossv_mc(nonlin_df, 100) %>% # cross validate the "nonlin_df" 100 times
+  # convert to tibble for easier manipulation
   mutate(
     train = map(train, as_tibble),
     test = map(test, as_tibble)) %>% 
+  # create 3 models to each training/testing set:
   mutate(
-    linear_fits = map(.x = train, ~lm(y ~ x, data = .x)))
+    linear_fits = map(.x = train, ~lm(y ~ x, data = .x)),
+    smooth_fits = map(.x = train, ~gam(y ~ s(x), data = .x)),
+    wiggly_fits = map(.x = train, ~gam(y ~ s(x, k = 30), sp = 10e-6, data = .x))) %>% 
+  mutate(
+    rmse_linear = map2_dbl(.x = linear_fits, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_smooth = map2_dbl(.x = smooth_fits, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_wiggly = map2_dbl(.x = wiggly_fits, .y = test, ~rmse(model = .x, data = .y)))
 ```
 
+Now plot the distribution of RMSE values for each model.
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+Repeating the training/testing split is helpful – now we get a sense of variance in prediction error and can compare 
+prediction error distributions across methods. The smooth fit is a clear winner!
+
+It’s worth remembering, though, that this isn’t testing a null hypothesis and there aren’t p-values as a result.
 
 
