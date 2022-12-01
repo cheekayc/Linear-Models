@@ -154,6 +154,7 @@ cv_df %>%
   mutate(model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
+
 Repeating the training/testing split is helpful – now we get a sense of variance in prediction error and can compare 
 prediction error distributions across methods. The smooth fit is a clear winner!
 

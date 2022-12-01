@@ -122,19 +122,19 @@ best:
 rmse(linear_mod, test_df)
 ```
 
-    ## [1] 0.7629767
+    ## [1] 0.774059
 
 ``` r
 rmse(wiggly_mod, test_df)
 ```
 
-    ## [1] 0.3803077
+    ## [1] 0.2689364
 
 ``` r
 rmse(smooth_mod, test_df)
 ```
 
-    ## [1] 0.3067936
+    ## [1] 0.2172105
 
 ``` r
 # Lower values mean better. We want lower prediction error!
@@ -183,6 +183,7 @@ cv_df %>%
 ```
 
 ![](Cross-Validation_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
 Repeating the training/testing split is helpful – now we get a sense of
 variance in prediction error and can compare prediction error
 distributions across methods. The smooth fit is a clear winner!
